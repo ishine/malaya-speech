@@ -46,6 +46,7 @@ class Model(tf.keras.Model):
         """
         super().__init__()
         self.mel = config.mel
+        self.factor = config.factor
         self.temperature = config.temperature
         self.length_scale = config.length_scale
         self.embedding = tf.keras.layers.Embedding(
@@ -57,8 +58,8 @@ class Model(tf.keras.Model):
             config.dur_layers, config.channels,
             config.dur_kernel, config.dur_dropout)
         # mean-only training
-        self.proj = tf.keras.layers.Dense(config.mel * 2)
-        self.interchannels = config.mel
+        self.proj = tf.keras.layers.Dense(config.neck * 2)
+        self.interchannels = config.neck
         self.segment_size = config.segment_size
         self.hop_size = config.hop_size
 
@@ -100,6 +101,7 @@ class Model(tf.keras.Model):
         mel = self.flow.inverse(sample * mask[..., None], mask)
         # [B]
         mellen = tf.cast(tf.reduce_sum(mask, axis=-1), tf.int32)
+        mel, mellen = self.unfold(mel, mellen)
         return mel, mellen, attn
 
     def compute_loss(self, text: tf.Tensor, textlen: tf.Tensor,
@@ -128,6 +130,8 @@ class Model(tf.keras.Model):
         m_p, logs_p = tf.split(stats, 2, axis=-1)
 
         # [B, T]
+        mel, mellen = self.fold(mel, mellen)
+
         melmask = self.mask(mellen, maxlen=tf.shape(mel)[1])
 
         z, m_q, logs_q = self.enc_q(mel, melmask)
@@ -162,39 +166,8 @@ class Model(tf.keras.Model):
             neg_cent = neg_cent1 + neg_cent2 + neg_cent3 + neg_cent4
             attn = tf.stop_gradient(self.monotonic_alignment_search(neg_cent, attnmask))
 
-        # x_s_sq_r = torch.exp(-2 * x_logs)
-        # logp1 = torch.sum(-0.5 * math.log(2 * math.pi) - x_logs, [1]).unsqueeze(-1) # [b, t, 1]
-        # logp2 = torch.matmul(x_s_sq_r.transpose(1,2), -0.5 * (z ** 2)) # [b, t, d] x [b, d, t'] = [b, t, t']
-        # logp3 = torch.matmul((x_m * x_s_sq_r).transpose(1,2), z) # [b, t, d] x [b, d, t'] = [b, t, t']
-        # logp4 = torch.sum(-0.5 * (x_m ** 2) * x_s_sq_r, [1]).unsqueeze(-1) # [b, t, 1]
-        # logp = logp1 + logp2 + logp3 + logp4 # [b, t, t']
-
-        # dist = tf.reduce_sum(tf.square(z_p), axis=-1, keepdims=True) - 2 * tf.matmul(z_p,
-        #                                                                              tf.transpose(m_p, [0, 2, 1])) + tf.reduce_sum(tf.square(m_p), axis=-1)[:, None]
-        # # [B, T', S], assume constant standard deviation, 1.
-        # ll = -0.5 * (np.log(2 * np.pi) + dist) * attnmask
-        # # [B, T', S], attention alignment
-        # attn = tf.stop_gradient(self.monotonic_alignment_search(ll, attnmask))
-
         m_p = tf.matmul(attn, m_p)
         logs_p = tf.matmul(attn, logs_p)
-
-        # def kl_loss(z_p, logs_q, m_p, logs_p, z_mask):
-        #     """
-        #     z_p, logs_q: [b, h, t_t]
-        #     m_p, logs_p: [b, h, t_t]
-        #     """
-        #     z_p = z_p.float()
-        #     logs_q = logs_q.float()
-        #     m_p = m_p.float()
-        #     logs_p = logs_p.float()
-        #     z_mask = z_mask.float()
-
-        #     kl = logs_p - logs_q - 0.5
-        #     kl += 0.5 * ((z_p - m_p)**2) * torch.exp(-2. * logs_p)
-        #     kl = torch.sum(kl * z_mask)
-        #     l = kl / torch.sum(z_mask)
-        #     return l
 
         if use_revsic:
             dlogdet = tf.reduce_sum(logs_p - logs_q - 0.5, axis=[1, 2])
@@ -215,9 +188,51 @@ class Model(tf.keras.Model):
         # []
         durloss = tf.reduce_mean(durloss)
 
-        z_slice, ids_slice = rand_slice_segments(z, mellen, self.segment_size // self.hop_size, np.log(1e-2))
+        z_, mellen_ = self.unfold(z, mellen)
+
+        z_slice, ids_slice = rand_slice_segments(z_, mellen_, self.segment_size // self.hop_size, np.log(1e-2))
 
         return {'kl': kl, 'durloss': durloss}, attn, z, z_slice, ids_slice
+
+    def fold(self, inputs: tf.Tensor, lengths: tf.Tensor) \
+            -> Tuple[tf.Tensor, tf.Tensor]:
+        """Fold inputs.
+        Args:
+            inputs: [tf.float32; [B, T, C]], input tensor.
+            lengths: [tf.int32; [B]], input lengths.
+        Returns:
+            folded: [tf.float32; [B, T // F, C x F]], folded.
+            lengths: [tf.int32; [B]], folded lengths.
+        """
+        # B, T, _
+        bsize, timestep, channels = shape_list(inputs)
+        if timestep % self.factor != 0:
+            rest = self.factor - timestep % self.factor
+            # [B, T + R, C]
+            inputs = tf.concat([inputs, tf.zeros([bsize, rest, channels])], axis=1)
+            # T + R
+            timestep = timestep + rest
+        # [B, T // F, C x F]
+        folded = tf.reshape(inputs, [bsize, timestep // self.factor, -1])
+        # T / F
+        lengths = tf.cast(tf.math.ceil(lengths / self.factor), tf.int32)
+        return folded, lengths
+
+    def unfold(self, inputs: tf.Tensor, lengths: tf.Tensor) \
+            -> Tuple[tf.Tensor, tf.Tensor]:
+        """Recover folded inputs.
+        Args:
+            inputs: [tf.float32; [B, T // F, C x F]], folded tensor.
+            lengths: [tf.int32; [B]], input lengths.
+        Returns:
+            recovered: [tf.float32; [B, T, C]], recovered.
+            lengths: [tf.int32; [B]], recovered lengths.
+        """
+        # B, T // F, _
+        bsize, timestep, _ = shape_list(inputs)
+        # [B, T, C]
+        recovered = tf.reshape(inputs, [bsize, timestep * self.factor, -1])
+        return recovered, lengths * self.factor
 
     def quantize(self, logdur: tf.Tensor, mask: tf.Tensor) -> tf.Tensor:
         """Convert log-duration to duration.
