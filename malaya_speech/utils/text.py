@@ -3,6 +3,7 @@ from unidecode import unidecode
 from sklearn.feature_extraction.text import CountVectorizer
 from sklearn.preprocessing import StandardScaler
 import numpy as np
+import inspect
 
 _pad = 'pad'
 _start = 'start'
@@ -87,7 +88,7 @@ class TextIDS_AZURE:
         **kwargs
     ):
         """
-        Normalize a string for TTS using Azure dataset mode.
+        Normalize a string for TTS task using Azure dataset mode.
 
         Parameters
         ----------
@@ -135,15 +136,30 @@ class TextIDS:
         self,
         pad_to: int = 8,
         understand_punct: bool = True,
+        is_lower: bool = True,
         normalizer=None,
         sentence_tokenizer=None,
         true_case_model=None,
     ):
         self.pad_to = pad_to
         self.understand_punct = understand_punct
+        self.is_lower = is_lower
         self.normalizer = normalizer
         self.sentence_tokenizer = sentence_tokenizer
         self.true_case_model = true_case_model
+
+        normalizer_parameters = list(inspect.signature(self.normalizer.normalize).parameters)
+        self.kwargs = {
+            'normalize_entity': False,
+            'normalize_text': False,
+            'normalize_url': True,
+            'normalize_email': True,
+            'normalize_telephone': True,
+        }
+        if 'check_english_func' in normalizer_parameters:
+            self.kwargs['check_english_func'] = None
+        else:
+            self.kwargs['check_english'] = False
 
     def normalize(
         self,
@@ -153,7 +169,7 @@ class TextIDS:
         **kwargs
     ):
         """
-        Normalize a string for TTS or force alignment task.
+        Normalize a string for TTS task.
 
         Parameters
         ----------
@@ -176,47 +192,29 @@ class TextIDS:
             string = self.sentence_tokenizer(string, minimum_length=0)
             string = '. '.join(string)
 
-        if self.true_case_model is not None:
-            string = self.true_case_model(string)
-
         string = re.sub(r'[ ]+', ' ', string).strip()
         if string[-1] in '-,':
             string = string[:-1]
         if string[-1] not in '.,?!':
             string = string + '.'
 
-        string = string.replace('&', ' dan ')
         string = string.replace(':', ',').replace(';', ',')
         if normalize and self.normalizer is not None:
-            t = self.normalizer._tokenizer(string)
-            for i in range(len(t)):
-                if t[i] == '-':
-                    t[i] = ','
-            string = ' '.join(t)
-            string = self.normalizer.normalize(
-                string,
-                check_english=False,
-                normalize_entity=False,
-                normalize_text=False,
-                normalize_url=True,
-                normalize_email=True,
-                normalize_telephone=True,
-            )
+            string = self.normalizer.normalize(string, **self.kwargs)
             string = string['normalize']
         else:
             string = string
         string = put_spacing_num(string)
-        string = ''.join(
-            [
-                c
-                for c in string
-                if c in TTS_SYMBOLS and c not in _rejected
-            ]
-        )
+        string = ''.join([c for c in string if c in TTS_SYMBOLS])
+
+        if self.true_case_model is not None:
+            string = self.true_case_model(string)
+
         if not self.understand_punct:
             string = ''.join([c for c in string if c not in _punct])
         string = re.sub(r'[ ]+', ' ', string).strip()
-        string = string.lower()
+        if self.is_lower:
+            string = string.lower()
         ids = tts_encode(string, TTS_SYMBOLS, add_eos=False)
         text_input = np.array(ids)
         num_pad = self.pad_to - ((len(text_input) + 2) % self.pad_to)
