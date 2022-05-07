@@ -9,9 +9,10 @@ from glob import glob
 from itertools import cycle
 import malaya_speech
 import malaya_speech.train
-from malaya_speech.train.model import univnet
+from malaya_speech.train.model import univnet_nonorm as univnet
 from malaya_speech.train.model import universal_melgan as melgan
 from malaya_speech.train.model import melgan as melgan_loss
+from malaya_speech.train.model import stft
 import malaya_speech.config
 from malaya_speech.train.loss import calculate_2d_loss, calculate_3d_loss
 import random
@@ -80,14 +81,30 @@ discriminator = melgan.MultiScaleDiscriminator(
     name='universalmelgan-discriminator',
 )
 
+stft_loss_params = {
+    'fft_lengths': [1024, 2048, 512],
+    'frame_steps': [120, 240, 50],
+    'frame_lengths': [600, 1200, 240],
+}
+stft_loss = stft.loss.MultiResolutionSTFT(**stft_loss_params)
 mels_loss = melgan_loss.loss.TFMelSpectrogram()
-
 mse_loss = tf.keras.losses.MeanSquaredError()
 mae_loss = tf.keras.losses.MeanAbsoluteError()
 
 
-def compute_per_example_generator_losses(audios, outputs):
-    y_hat = outputs
+def compute_per_example_generator_losses(features):
+    y_hat = generator(features['mel'], training=True)
+    audios = features['audio']
+
+    sc_loss, mag_loss = calculate_2d_loss(
+        audios, tf.squeeze(y_hat, -1), stft_loss
+    )
+
+    sc_loss = tf.where(sc_loss >= 10.0, tf.zeros_like(sc_loss), sc_loss)
+    mag_loss = tf.where(mag_loss >= 10.0, tf.zeros_like(mag_loss), mag_loss)
+
+    generator_loss = 0.5 * (sc_loss + mag_loss)
+
     p_hat = discriminator(y_hat)
     p = discriminator(tf.expand_dims(audios, 2))
 
@@ -103,22 +120,25 @@ def compute_per_example_generator_losses(audios, outputs):
     fm_loss /= (i + 1) * (j + 1)
     adv_loss += 10 * fm_loss
 
-    per_example_losses = adv_loss
+    generator_loss += 4.0 * adv_loss
+
+    per_example_losses = generator_loss
 
     a = calculate_2d_loss(audios, tf.squeeze(y_hat, -1), loss_fn=mels_loss)
 
     dict_metrics_losses = {
         'adversarial_loss': adv_loss,
         'fm_loss': fm_loss,
-        'gen_loss': adv_loss,
+        'gen_loss': tf.reduce_mean(generator_loss),
         'mels_spectrogram_loss': tf.reduce_mean(a),
     }
 
     return per_example_losses, dict_metrics_losses
 
 
-def compute_per_example_discriminator_losses(audios, gen_outputs):
-    y_hat = gen_outputs
+def compute_per_example_discriminator_losses(features):
+    y_hat = generator(features['mel'], training=True)
+    audios = features['audio']
     y = tf.expand_dims(audios, 2)
     p = discriminator(y)
     p_hat = discriminator(y_hat)
@@ -144,17 +164,13 @@ def compute_per_example_discriminator_losses(audios, gen_outputs):
     return per_example_losses, dict_metrics_losses
 
 
-y_hat = generator(features['mel'], training=True)
-audios = features['audio']
 per_example_losses, generator_losses = compute_per_example_generator_losses(
-    audios, y_hat
+    features
 )
 generator_loss = tf.reduce_mean(per_example_losses)
 
-y_hat = generator(features['mel'], training=True)
-audios = features['audio']
 per_example_losses, discriminator_losses = compute_per_example_discriminator_losses(
-    audios, y_hat
+    features
 )
 discriminator_loss = tf.reduce_mean(per_example_losses)
 
@@ -176,38 +192,53 @@ g_vars = [
     var for var in t_vars if var.name.startswith('universalunivnet-generator')
 ]
 
-d_optimizer = tf.train.AdamOptimizer(0.0001, beta1=0.5, beta2=0.9).minimize(
-    discriminator_loss, var_list=d_vars
+global_step_generator = tf.Variable(
+    100000, trainable=False, name='global_step_generator'
+)
+global_step_discriminator = tf.Variable(
+    100000, trainable=False, name='global_step_discriminator'
+)
+
+d_optimizer = tf.train.AdamOptimizer(0.00001, beta1=0.5, beta2=0.9).minimize(
+    discriminator_loss, var_list=d_vars, global_step=global_step_discriminator
 )
 g_optimizer = tf.train.AdamOptimizer(0.0001, beta1=0.5, beta2=0.9).minimize(
-    generator_loss, var_list=g_vars
+    generator_loss, var_list=g_vars, global_step=global_step_generator
 )
 
 sess = tf.InteractiveSession()
 sess.run(tf.global_variables_initializer())
+
+saver = tf.train.Saver(var_list=g_vars)
+saver.restore(sess, tf.train.latest_checkpoint('universal-univnet-32-generator'))
+
 saver = tf.train.Saver()
 
-checkpoint = 5000
+checkpoint = 10000
 write_tensorboard = 100
-epoch = 1_000_000
-path = 'universal-univnet-32'
+epoch = 4_000_000
+path = 'universal-univnet-32-combined'
 
 writer = tf.summary.FileWriter(f'./{path}')
 
 ckpt_path = tf.train.latest_checkpoint(path)
 if ckpt_path:
     saver.restore(sess, ckpt_path)
+    print(f'restoring checkpoint from {ckpt_path}')
 
-for i in range(epoch):
-    g_loss, _ = sess.run([generator_loss, g_optimizer])
+global_step = sess.run(global_step_generator)
+for i in range(global_step, epoch):
+    g_loss, _, g_losses = sess.run([generator_loss, g_optimizer, generator_losses])
     d_loss, _ = sess.run([discriminator_loss, d_optimizer])
-    s = sess.run(summaries)
-    writer.add_summary(s, i)
+    i = sess.run(global_step_generator)
+
+    if i % write_tensorboard == 0:
+        s = sess.run(summaries)
+        writer.add_summary(s, i)
 
     if i % checkpoint == 0:
         saver.save(sess, f'{path}/model.ckpt', global_step=i)
 
-    if i % write_tensorboard == 0:
-        writer.add_summary(s, i)
+    print(i, g_loss, d_loss, g_losses)
 
-    print(i, g_loss, d_loss)
+saver.save(sess, f'{path}/model.ckpt', global_step=epoch)

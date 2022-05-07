@@ -42,11 +42,6 @@ _melgan_availability = {
         'Quantized Size (MB)': 19.9,
         'Mel loss': 0.4591,
     },
-    'universal-384': {
-        'Size (MB)': 78.4,
-        'Quantized Size (MB)': 19.9,
-        'Mel loss': 0.4591,
-    },
 }
 
 _mbmelgan_availability = {
