@@ -1,6 +1,9 @@
 from malaya_speech.supervised import classification
 from herpetologist import check_type
 
+# EER calculation, https://github.com/huseinzol05/malaya-speech/tree/master/pretrained-model/speaker-embedding/calculate-EER
+# EER tested on VoxCeleb2 test set.
+
 _availability = {
     'deep-speaker': {
         'Size (MB)': 96.7,
@@ -25,7 +28,19 @@ _availability = {
         'Quantized Size (MB)': 8.88,
         'Embedding Size': 7205,
         'EER': 0.3000285,
-    }
+    },
+    'conformer-base': {
+        'Size (MB)': 99.4,
+        'Quantized Size (MB)': 27.2,
+        'Embedding Size': 512,
+        'EER': 0.06938,
+    },
+    'conformer-tiny': {
+        'Size (MB)': 20.3,
+        'Quantized Size (MB)': 6.21,
+        'Embedding Size': 512,
+        'EER': 0.08687,
+    },
 }
 
 trillsson_accuracy = {
@@ -66,6 +81,8 @@ def deep_model(model: str = 'vggvox-v2', quantized: bool = False, **kwargs):
         * ``'vggvox-v2'`` - VGGVox V2, embedding size 512, exported from https://github.com/WeidiXie/VGG-Speaker-Recognition
         * ``'deep-speaker'`` - Deep Speaker, embedding size 512, exported from https://github.com/philipperemy/deep-speaker
         * ``'speakernet'`` - SpeakerNet, embedding size 7205, exported from https://github.com/NVIDIA/NeMo/tree/main/examples/speaker_recognition
+        * ``'conformer-base'`` - Conformer BASE size, embedding size 512.
+        * ``'conformer-tiny'`` - Conformer TINY size, embedding size 512.
 
     quantized : bool, optional (default=False)
         if True, will load 8-bit quantized model.
@@ -86,7 +103,7 @@ def deep_model(model: str = 'vggvox-v2', quantized: bool = False, **kwargs):
         model=model,
         module='speaker-vector',
         extra={},
-        label={},
+        label=None,
         quantized=quantized,
         **kwargs
     )
