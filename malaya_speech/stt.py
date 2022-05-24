@@ -152,6 +152,25 @@ _ctc_availability = {
     },
 }
 
+_huggingface_availability = {
+    'malay-huggingface/wav2vec2-xls-r-300m-mixed': {
+        'Size (MB)': 1180,
+        'WER': 0.1415146,
+        'CER': 0.048555,
+        'WER-LM': 0.098091,
+        'CER-LM': 0.039775,
+        'Language': ['malay', 'singlish', 'mandarin'],
+    },
+    'malay-huggingface/wav2vec2-xls-r-1b-mixed': {
+        'Size (MB)': 3590,
+        'WER': 0.2411256,
+        'CER': 0.0787939,
+        'WER-LM': 0.13276059,
+        'CER-LM': 0.05748197,
+        'Language': ['malay', 'singlish', 'mandarin'],
+    },
+}
+
 google_accuracy = {
     'malay': {
         'WER': 0.164775,
@@ -255,6 +274,15 @@ def available_transducer():
     from malaya_speech.utils import describe_availability
 
     return describe_availability(_transducer_availability)
+
+
+def available_huggingface():
+    """
+    List available HuggingFace Malaya-Speech ASR models.
+    """
+    from malaya_speech.utils import describe_availability
+
+    return describe_availability(_huggingface_availability)
 
 
 @check_type
@@ -382,3 +410,29 @@ def deep_transducer(
         quantized=quantized,
         **kwargs
     )
+
+
+@check_type
+def huggingface(model: str = 'malay-huggingface/wav2vec2-xls-r-300m-mixed'):
+    """
+    Load Finetuned models from HuggingFace. 
+    This is simply a wrapper to call `transformers.AutoModelForCTC`.
+
+    Parameters
+    ----------
+    model : str, optional (default='malay-huggingface/wav2vec2-xls-r-300m-mixed')
+        Model architecture supported. Allowed values:
+
+        * ``'malay-huggingface/wav2vec2-xls-r-300m-mixed'`` - wav2vec2 XLS-R 300M finetuned on (Malay + Singlish + Mandarin) languages.
+        * ``'malay-huggingface/wav2vec2-xls-r-1b-mixed'`` - wav2vec2 XLS-R 1B finetuned on (Malay + Singlish + Mandarin) languages.
+    Returns
+    -------
+    result : malaya_speech.model.huggingface.CTC class
+    """
+    model = model.lower()
+    if model not in _huggingface_availability:
+        raise ValueError(
+            'model not supported, please check supported models from `malaya_speech.stt.available_huggingface()`.'
+        )
+
+    return stt.huggingface_load(model=model)
