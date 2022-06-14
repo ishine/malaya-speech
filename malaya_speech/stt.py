@@ -42,46 +42,46 @@ _transducer_availability = {
     'conformer-stack-2mixed': {
         'Size (MB)': 130,
         'Quantized Size (MB)': 38.5,
-        'WER': 0.1376717,
-        'CER': 0.0717507,
-        'WER-LM': None,
-        'CER-LM': None,
+        'WER': 0.1036084,
+        'CER': 0.050069,
+        'WER-LM': 0.1029111,
+        'CER-LM': 0.0502013,
         'Language': ['malay', 'singlish'],
     },
     'conformer-stack-3mixed': {
         'Size (MB)': 130,
         'Quantized Size (MB)': 38.5,
-        'WER': 0.27758773,
-        'CER': 0.1631205,
-        'WER-LM': None,
-        'CER-LM': None,
+        'WER': 0.2347684,
+        'CER': 0.133944,
+        'WER-LM': 0.229241,
+        'CER-LM': 0.1307018,
         'Language': ['malay', 'singlish', 'mandarin'],
     },
     'small-conformer-singlish': {
         'Size (MB)': 49.2,
         'Quantized Size (MB)': 18.1,
-        'WER': 0.12771,
-        'CER': 0.0703953,
-        'WER-LM': None,
-        'CER-LM': None,
+        'WER': 0.0878310,
+        'CER': 0.0456859,
+        'WER-LM': 0.08733263,
+        'CER-LM': 0.04531657,
         'Language': ['singlish'],
     },
     'conformer-singlish': {
         'Size (MB)': 125,
         'Quantized Size (MB)': 37.1,
-        'WER': 0.0963391,
-        'CER': 0.0545533,
-        'WER-LM': None,
-        'CER-LM': None,
+        'WER': 0.07779246,
+        'CER': 0.0403616,
+        'WER-LM': 0.07718602,
+        'CER-LM': 0.03986952,
         'Language': ['singlish'],
     },
     'large-conformer-singlish': {
         'Size (MB)': 404,
         'Quantized Size (MB)': 107,
-        'WER': 0.0839525,
-        'CER': 0.0445617,
-        'WER-LM': None,
-        'CER-LM': None,
+        'WER': 0.07014733,
+        'CER': 0.03587201,
+        'WER-LM': 0.06981206,
+        'CER-LM': 0.03572307,
         'Language': ['singlish'],
     },
 }
@@ -153,20 +153,12 @@ _ctc_availability = {
 }
 
 _huggingface_availability = {
-    'malay-huggingface/wav2vec2-xls-r-300m-mixed': {
+    'mesolitica/wav2vec2-xls-r-300m-mixed': {
         'Size (MB)': 1180,
-        'WER': 0.1415146,
-        'CER': 0.048555,
-        'WER-LM': 0.098091,
-        'CER-LM': 0.039775,
-        'Language': ['malay', 'singlish', 'mandarin'],
-    },
-    'malay-huggingface/wav2vec2-xls-r-1b-mixed': {
-        'Size (MB)': 3590,
-        'WER': 0.2411256,
-        'CER': 0.0787939,
-        'WER-LM': 0.13276059,
-        'CER-LM': 0.05748197,
+        'WER': 0.1322198,
+        'CER': 0.0481054,
+        'WER-LM': 0.0988016,
+        'CER-LM': 0.0411965,
         'Language': ['malay', 'singlish', 'mandarin'],
     },
 }
@@ -413,18 +405,17 @@ def deep_transducer(
 
 
 @check_type
-def huggingface(model: str = 'malay-huggingface/wav2vec2-xls-r-300m-mixed'):
+def huggingface(model: str = 'mesolitica/wav2vec2-xls-r-300m-mixed', **kwargs):
     """
-    Load Finetuned models from HuggingFace. 
-    This is simply a wrapper to call `transformers.AutoModelForCTC`.
+    Load Finetuned models from HuggingFace. Required Tensorflow >= 2.0.
 
     Parameters
     ----------
-    model : str, optional (default='malay-huggingface/wav2vec2-xls-r-300m-mixed')
+    model : str, optional (default='mesolitica/wav2vec2-xls-r-300m-mixed')
         Model architecture supported. Allowed values:
 
-        * ``'malay-huggingface/wav2vec2-xls-r-300m-mixed'`` - wav2vec2 XLS-R 300M finetuned on (Malay + Singlish + Mandarin) languages.
-        * ``'malay-huggingface/wav2vec2-xls-r-1b-mixed'`` - wav2vec2 XLS-R 1B finetuned on (Malay + Singlish + Mandarin) languages.
+        * ``'mesolitica/wav2vec2-xls-r-300m-mixed'`` - wav2vec2 XLS-R 300M finetuned on (Malay + Singlish + Mandarin) languages.
+
     Returns
     -------
     result : malaya_speech.model.huggingface.CTC class
@@ -435,4 +426,4 @@ def huggingface(model: str = 'malay-huggingface/wav2vec2-xls-r-300m-mixed'):
             'model not supported, please check supported models from `malaya_speech.stt.available_huggingface()`.'
         )
 
-    return stt.huggingface_load(model=model)
+    return stt.huggingface_load(model=model, **kwargs)
