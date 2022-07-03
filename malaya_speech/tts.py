@@ -242,11 +242,11 @@ _vits_availability = {
         'Is lowercase': False,
     },
     'yasmin-sdp': {
-        'Size (MB)': 39.9,
-        'Quantized Size (MB)': 10.2,
-        'mel loss': 0.37,
-        'kl loss': 1.431,
-        'duration loss': 0.057,
+        'Size (MB)': 116,
+        'Quantized Size (MB)': 30.9,
+        'mel loss': 0.3333,
+        'kl loss': 1.451,
+        'duration loss': 1.531,
         'Understand punctuation': True,
         'Is lowercase': False,
     },
@@ -360,10 +360,10 @@ def tacotron2(
     model: str = 'yasmin',
     quantized: bool = False,
     pad_to: int = 8,
-    **kwargs
+    **kwargs,
 ):
     """
-    Load Tacotron2 TTS model.
+    Load Tacotron2 Text-to-Mel TTS model.
 
     Parameters
     ----------
@@ -418,10 +418,10 @@ def fastspeech2(
     model: str = 'male',
     quantized: bool = False,
     pad_to: int = 8,
-    **kwargs
+    **kwargs,
 ):
     """
-    Load Fastspeech2 TTS model.
+    Load Fastspeech2 Text-to-Mel TTS model.
 
     Parameters
     ----------
@@ -476,10 +476,10 @@ def fastpitch(
     model: str = 'male',
     quantized: bool = False,
     pad_to: int = 8,
-    **kwargs
+    **kwargs,
 ):
     """
-    Load Fastspitch TTS model.
+    Load Fastspitch Text-to-Mel TTS model.
 
     Parameters
     ----------
@@ -527,12 +527,14 @@ def fastpitch(
     )
 
 
-def glowtts(model: str = 'yasmin',
-            quantized: bool = False,
-            pad_to: int = 2,
-            **kwargs):
+def glowtts(
+    model: str = 'yasmin',
+    quantized: bool = False,
+    pad_to: int = 2,
+    **kwargs,
+):
     """
-    Load GlowTTS TTS model.
+    Load GlowTTS Text-to-Mel TTS model.
 
     Parameters
     ----------
@@ -588,10 +590,10 @@ def lightspeech(
     model: str = 'male',
     quantized: bool = False,
     pad_to: int = 8,
-    **kwargs
+    **kwargs,
 ):
     """
-    Load LightSpeech TTS model.
+    Load LightSpeech Text-to-Mel TTS model.
 
     Parameters
     ----------
@@ -637,7 +639,12 @@ def lightspeech(
     )
 
 
-def vits(model: str = 'yasmin-sdp', quantized=False, **kwargs):
+def vits(
+    model: str = 'yasmin-sdp',
+    quantized=False,
+    pad_to: int = 8,
+    **kwargs,
+):
     """
     Load VITS End-to-End TTS model.
 
