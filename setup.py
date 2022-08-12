@@ -26,9 +26,7 @@ setuptools.setup(
     keywords=['nlp', 'bm'],
     install_requires=req,
     extras_require={
-        'gpu': ['tensorflow-gpu>=1.15'],
-        'cpu': ['tensorflow>=1.15'],
-        '': ['tensorflow>=1.15']
+        'full': ['pydub', 'pysndfx', 'pyroomacoustics'],
     },
     license='MIT',
     classifiers=[

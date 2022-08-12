@@ -142,7 +142,7 @@ Contents:
    
    load-noise-reduction
    load-speech-enhancement
-   load-super-resolution
+   load-super-resolution-unet
 
 .. toctree::
    :maxdepth: 2
@@ -184,16 +184,6 @@ Contents:
    :caption: Extra Module
 
    load-load-rttm
-
-.. toctree::
-   :maxdepth: 2
-   :caption: Train ASR
-
-   prepare-sebut-perkataan-tfrecord
-   train-asr-cnn-rnn
-   train-asr-mini-jasper
-   train-asr-quartznet
-   train-asr-small-conformer
 
 .. toctree::
    :maxdepth: 2

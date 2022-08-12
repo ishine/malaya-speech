@@ -8,6 +8,15 @@ import math
 from python_speech_features import fbank
 from malaya_speech.utils.constant import MEL_MEAN, MEL_STD, ECAPA_TDNN_WINDOWS
 
+pyworld_exist = True
+try:
+    import pyworld as pw
+except Exception as e:
+    pyworld_exist = False
+
+mel_basis = None
+mel_basis_44k = None
+
 
 class SpeakerNetFeaturizer:
     def __init__(
@@ -482,7 +491,9 @@ def universal_mel(
     num_mels=80,
     fmin=80,
     fmax=7600,
+    return_energy=False,
 ):
+    global mel_basis
     D = librosa.stft(
         signal,
         n_fft=fft_size,
@@ -492,13 +503,84 @@ def universal_mel(
         pad_mode='reflect',
     )
     S, _ = librosa.magphase(D)
-    mel_basis = librosa.filters.mel(
-        sr=sampling_rate,
-        n_fft=fft_size,
-        n_mels=num_mels,
-        fmin=fmin,
-        fmax=fmax,
-    )
+    if mel_basis is None:
+        mel_basis = librosa.filters.mel(
+            sr=sampling_rate,
+            n_fft=fft_size,
+            n_mels=num_mels,
+            fmin=fmin,
+            fmax=fmax,
+        )
     mel = np.log10(np.maximum(np.dot(mel_basis, S), 1e-10)).T
     mel = (mel - MEL_MEAN) / MEL_STD
-    return mel
+    if return_energy:
+        energy = np.sqrt(np.sum(S ** 2, axis=0))
+        return mel, energy
+    else:
+        return mel
+
+
+def universal_mel_44k(
+    signal,
+    sampling_rate=44100,
+    fft_size=2048,
+    hop_size=441,
+    win_length=None,
+    window='hann',
+    num_mels=128,
+    fmin=80,
+    fmax=22000,
+    return_energy=False,
+):
+    global mel_basis_44k
+    D = librosa.stft(
+        signal,
+        n_fft=fft_size,
+        hop_length=hop_size,
+        win_length=win_length,
+        window=window,
+        pad_mode='reflect',
+    )
+    S, _ = librosa.magphase(D)
+    if mel_basis_44k is None:
+        mel_basis_44k = librosa.filters.mel(
+            sr=sampling_rate,
+            n_fft=fft_size,
+            n_mels=num_mels,
+            fmin=fmin,
+            fmax=fmax,
+        )
+    mel = np.log10(np.maximum(np.dot(mel_basis, S), 1e-10)).T
+    mel = (mel - MEL_MEAN) / MEL_STD
+    if return_energy:
+        energy = np.sqrt(np.sum(S ** 2, axis=0))
+        return mel, energy
+    else:
+        return mel
+
+
+def extract_pitch(
+    y,
+    hop_size: int = 256,
+    sr: int = 22050,
+    bad_f0: float = 5.0,
+    zero_value=-10.0,
+):
+    """
+    Originally from https://github.com/yl4579/PitchExtractor/blob/main/meldataset.py
+    """
+    if not pyworld_exist:
+        raise Exception('pyworld not installed. Please install it by `pip3 install pyworld` and try again.')
+
+    y = y.astype(np.double)
+    frame_period = hop_size * 1000 / sr
+    _f0, t = pw.harvest(y, sr, frame_period=frame_period)
+    if sum(_f0 != 0) < bad_f0:
+        _f0, t = pw.dio(y, sr, frame_period=frame_period)
+    f0 = pw.stonemask(y, _f0, t, sr)
+    f0_zero = (f0 == 0)
+    is_silence = np.zeros(f0.shape)
+    is_silence[f0_zero] = 1
+
+    f0[np.isnan(f0)] = zero_value
+    return f0, is_silence

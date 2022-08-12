@@ -10,7 +10,7 @@ import numpy as np
 import logging
 from typing import Callable
 
-logger = logging.getLogger('malaya_speech.tts')
+logger = logging.getLogger(__name__)
 
 _tacotron2_availability = {
     'male': {
@@ -107,24 +107,10 @@ _fastspeech2_availability = {
         'Understand punctuation': True,
         'Is lowercase': False,
     },
-    'yasmin-small': {
-        'Size (MB)': 32.9,
-        'Quantized Size (MB)': 8.5,
-        'Combined loss': 0.7994,
-        'Understand punctuation': True,
-        'Is lowercase': False,
-    },
     'osman': {
         'Size (MB)': 125,
         'Quantized Size (MB)': 31.7,
         'Combined loss': 0.7341,
-        'Understand punctuation': True,
-        'Is lowercase': False,
-    },
-    'osman-small': {
-        'Size (MB)': 32.9,
-        'Quantized Size (MB)': 8.5,
-        'Combined loss': 0.8182,
         'Understand punctuation': True,
         'Is lowercase': False,
     },
@@ -232,18 +218,16 @@ _lightspeech_availability = {
 }
 
 _vits_availability = {
-    'yasmin': {
-        'Size (MB)': 114,
-        'Quantized Size (MB)': 29.7,
+    'mesolitica/VITS-osman': {
+        'Size (MB)': 145,
         'mel loss': 0.37,
         'kl loss': 1.431,
         'duration loss': 0.057,
         'Understand punctuation': True,
         'Is lowercase': False,
     },
-    'yasmin-sdp': {
-        'Size (MB)': 116,
-        'Quantized Size (MB)': 30.9,
+    'mesolitica/VITS-yasmin': {
+        'Size (MB)': 145,
         'mel loss': 0.3333,
         'kl loss': 1.451,
         'duration loss': 1.531,
@@ -341,8 +325,8 @@ def load_text_ids(
             'malaya not installed. Please install it by `pip install malaya` and try again.'
         )
 
-    if version.parse(malaya.__version__) < version.parse('4.7.5'):
-        logger.warning('To get better speech synthesis, make sure Malaya version >= 4.7.5')
+    if version.parse(malaya.__version__) < version.parse('4.9'):
+        logger.warning('To get better speech synthesis, make sure Malaya version >= 4.9')
 
     normalizer = malaya.normalize.normalizer()
     sentence_tokenizer = malaya.text.function.split_into_sentences
@@ -639,12 +623,7 @@ def lightspeech(
     )
 
 
-def vits(
-    model: str = 'yasmin-sdp',
-    quantized=False,
-    pad_to: int = 8,
-    **kwargs,
-):
+def vits(model: str = 'mesolitica/VITS-osman', **kwargs):
     """
     Load VITS End-to-End TTS model.
 
@@ -653,22 +632,13 @@ def vits(
     model : str, optional (default='male')
         Model architecture supported. Allowed values:
 
-        * ``'yasmin'`` - VITS trained on female Yasmin voice.
-        * ``'yasmin-sdp'`` - VITS + Stochastic Duration Predictor trained on female Yasmin voice.
-        * ``'osman-sdp'`` - VITS + Stochastic Duration Predictor trained on male Osman voice.
-
-    quantized : bool, optional (default=False)
-        if True, will load 8-bit quantized model.
-        Quantized model not necessary faster, totally depends on the machine.
-    pad_to : int, optional (default=8)
-        size of pad character with 0. Increase can stable up prediction on short sentence, we trained on 8.
+        * ``'mesolitica/VITS-osman'`` - VITS trained on male Osman voice.
+        * ``'mesolitica/VITS-yasmin'`` - VITS trained on female Yasmin voice.
 
     Returns
     -------
-    result : malaya_speech.model.synthesis.VITS class
+    result : malaya_speech.torch_model.synthesis.VITS class
     """
-
-    model = model.lower()
 
     if model not in _vits_availability:
         raise ValueError(
@@ -678,16 +648,13 @@ def vits(
     selected_model = _vits_availability[model]
 
     text_ids = load_text_ids(
-        pad_to=pad_to,
+        pad_to=None,
         understand_punct=selected_model['Understand punctuation'],
         is_lower=selected_model['Is lowercase'],
-        quantized=quantized,
         **kwargs
     )
-    return tts.vits_load(
+    return tts.vits_torch_load(
         model=model,
-        module='text-to-speech-vits',
         normalizer=text_ids,
-        quantized=quantized,
-        **kwargs
+        **kwargs,
     )
